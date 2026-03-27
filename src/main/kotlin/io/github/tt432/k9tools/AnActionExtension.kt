@@ -47,7 +47,7 @@ fun getFieldGeneric(type: PsiTypeElement?): Array<PsiTypeElement?> {
 }
 
 fun getTypeName(field: PsiField): String {
-    return field.type.getCanonicalText(true)
+    return getTypeName(field.typeElement)
     //val typeElement = field.typeElement ?: return ""
     //return getTypeName(typeElement)
 }
