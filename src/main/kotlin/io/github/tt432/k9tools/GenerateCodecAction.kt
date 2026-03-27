@@ -56,7 +56,7 @@ class GenerateCodecAction : AnAction() {
 
         private const val Codec: String = "com.mojang.serialization.Codec"
         private const val StringRepresentable: String = "net.minecraft.util.StringRepresentable"
-        private const val NotNull: String = "org.jetbrains.annotations.NotNull"
+        private const val NonNull: String = "org.jspecify.annotations.NonNull"
         private const val RecordCodecBuilder: String = "com.mojang.serialization.codecs.RecordCodecBuilder"
     }
 
@@ -81,7 +81,7 @@ class GenerateCodecAction : AnAction() {
 
                 val stringRepresentableImpl = factory.createMethodFromText(
                     "    @Override\n" +
-                            "    @$NotNull\n" +
+                            "    @$NonNull\n" +
                             "    public String getSerializedName() {\n" +
                             "        return name();\n" +
                             "    }",
