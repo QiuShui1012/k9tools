@@ -165,7 +165,7 @@ class GenerateCodecAction : AnAction() {
     }
 
     private fun getFieldOf(field: PsiField): String {
-        field.annotations.forEach {
+        field.annotations.forEach { it ->
             val name = it.qualifiedName ?: return@forEach
             val split = name.split("\\.".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
 
