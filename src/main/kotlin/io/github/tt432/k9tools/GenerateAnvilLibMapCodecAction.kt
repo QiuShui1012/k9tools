@@ -12,7 +12,7 @@ import com.intellij.psi.PsiTypeElement
 import com.intellij.psi.codeStyle.JavaCodeStyleManager
 
 /**
- * @author TT432
+ * @author QiuShui1012
  */
 @Suppress("ConstPropertyName", "DuplicatedCode")
 class GenerateAnvilLibMapCodecAction : AnAction() {
@@ -54,7 +54,7 @@ class GenerateAnvilLibMapCodecAction : AnAction() {
                     ${getCodecRef(it.typeElement)}
                     .${getFieldOf(it)}
                     .forGetter(${
-                        getGetterName(
+                        getGetter(
                             className,
                             it,
                             getFieldAndGetterMethod(psiClass)

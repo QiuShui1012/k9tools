@@ -11,6 +11,10 @@ import com.intellij.psi.PsiTypeParameter
 import com.intellij.psi.search.GlobalSearchScope
 import java.util.logging.Logger
 
+/**
+ * @author QiuShui1012
+ */
+
 private val LOGGER = Logger.getLogger("ByteBufFinder")
 
 /**

@@ -118,7 +118,7 @@ class GenerateStreamCodecAction : AnAction() {
         fields.forEach {
             fieldsStr.append(
                 "    ${getCodecRef(it.typeElement)},\n" +
-                "    ${getGetterName(className, it, getFieldAndGetterMethod(psiClass))},\n"
+                "    ${getGetter(className, it, getFieldAndGetterMethod(psiClass))},\n"
             )
         }
 

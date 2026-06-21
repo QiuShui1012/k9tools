@@ -101,7 +101,7 @@ class GenerateCodecAction : AnAction() {
         fields.filter { !it.hasModifier(JvmModifier.STATIC) }.forEach {
             fieldsStr.append(
                 "    ${getCodecRef(it.typeElement)}.${getFieldOf(it)}.forGetter(${
-                    getGetterName(
+                    getGetter(
                         className,
                         it,
                         getFieldAndGetterMethod(psiClass)

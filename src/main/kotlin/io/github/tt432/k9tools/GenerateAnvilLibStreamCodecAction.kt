@@ -13,7 +13,7 @@ import com.intellij.psi.PsiTypeElement
 import com.intellij.psi.codeStyle.JavaCodeStyleManager
 
 /**
- * @author TT432
+ * @author QiuShui1012
  */
 @Suppress("ConstPropertyName", "LocalVariableName", "DuplicatedCode")
 class GenerateAnvilLibStreamCodecAction : AnAction() {
@@ -115,7 +115,7 @@ class GenerateAnvilLibStreamCodecAction : AnAction() {
         fields.forEach {
             fieldsStr.append(
                 "    ${getCodecRef(it.typeElement)},\n" +
-                "    ${getGetterName(className, it, getFieldAndGetterMethod(psiClass))},\n"
+                "    ${getGetter(className, it, getFieldAndGetterMethod(psiClass))},\n"
             )
         }
 
