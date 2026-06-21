@@ -1,11 +1,11 @@
 plugins {
     id("java")
     id("org.jetbrains.kotlin.jvm") version "2.3.20"
-    id("org.jetbrains.intellij.platform") version "2.13.1"
+    id("org.jetbrains.intellij.platform") version "2.16.0"
 }
 
 group = "io.github.tt432"
-version = "1.2.3-SNAPSHOT"
+version = "1.3.0-SNAPSHOT"
 
 repositories {
     mavenCentral()
@@ -31,7 +31,6 @@ intellijPlatform {
     }
 }
 
-
 tasks {
     // Set the JVM compatibility versions
     withType<JavaCompile> {
@@ -52,6 +51,10 @@ tasks {
 
     publishPlugin {
         token.set(System.getenv("PUBLISH_TOKEN"))
+    }
+
+    processResources {
+        duplicatesStrategy = DuplicatesStrategy.INCLUDE
     }
 
     register("printVersion") {

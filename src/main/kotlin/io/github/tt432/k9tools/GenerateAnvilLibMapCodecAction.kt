@@ -4,10 +4,8 @@ import com.intellij.lang.jvm.JvmModifier
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.command.WriteCommandAction
-import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiClass
-import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiElementFactory
 import com.intellij.psi.PsiField
 import com.intellij.psi.PsiTypeElement
@@ -17,13 +15,10 @@ import com.intellij.psi.codeStyle.JavaCodeStyleManager
  * @author TT432
  */
 @Suppress("ConstPropertyName", "DuplicatedCode")
-class GenerateCodecAction : AnAction() {
+class GenerateAnvilLibMapCodecAction : AnAction() {
     companion object {
-        private const val Codec: String = "com.mojang.serialization.Codec"
-        private const val StringRepresentable: String = "net.minecraft.util.StringRepresentable"
-        private const val NonNull: String = "org.jspecify.annotations.NonNull"
-        private const val Locale: String = "java.util.Locale"
-        private const val RecordCodecBuilder: String = "com.mojang.serialization.codecs.RecordCodecBuilder"
+        private const val MapCodec: String = "com.mojang.serialization.MapCodec"
+        private const val CodecUtil: String = "dev.anvilcraft.lib.v2.codec.CodecUtil"
     }
 
     override fun actionPerformed(event: AnActionEvent) {
@@ -35,58 +30,13 @@ class GenerateCodecAction : AnAction() {
             if (editor == null || psiClass == null) return@runWriteCommandAction
 
             if (psiClass.isEnum) {
-                addImplementsClause(psiClass, editor, project, "StringRepresentable")
-
-                val factory = PsiElementFactory.getInstance(project)
-                val styleManager = JavaCodeStyleManager.getInstance(project)
-
-                if (!psiClass.fields.any { it.name == "CODEC" }) {
-                    val codecField = factory.createFieldFromText(
-                        "public static final $Codec<${psiClass.name}> CODEC = $StringRepresentable.fromEnum(${psiClass.name}::values);",
-                        psiClass
-                    )
-
-                    psiClass.add(styleManager.shortenClassReferences(codecField))
-                }
-
-                if (!psiClass.methods.any { it.name == "getSerializedName" }) {
-                    val stringRepresentableImpl = factory.createMethodFromText(
-                        "@Override @$NonNull public String getSerializedName() { return this.name().toLowerCase($Locale.ROOT); }",
-                        psiClass
-                    )
-
-                    psiClass.add(styleManager.shortenClassReferences(stringRepresentableImpl))
-                }
+                val action = event.actionManager.getAction("Generate.AnvilLibCodec")
+                event.actionManager.tryToExecute(action, null, null, null, true)
             } else {
                 processRecordOrClass(psiClass, project)
             }
+
         }
-    }
-
-    @Suppress("SameParameterValue")
-    private fun addImplementsClause(psiClass: PsiClass, editor: Editor, project: Project, interfaceName: String) {
-        val implementsList = psiClass.implementsList
-        if (implementsList != null) {
-            val existingInterfaces = implementsList.referenceElements.map { it.referenceName }
-            if (existingInterfaces.contains(interfaceName)) {
-                return // 已经实现了该接口，无需重复添加
-            }
-
-            // 在现有 implements 列表末尾追加新接口
-            val lastInterface = implementsList.referenceElements.lastOrNull()
-            if (lastInterface != null) {
-                val insertOffset = lastInterface.textRange.endOffset
-                editor.document.insertString(insertOffset, ", $interfaceName")
-                PsiDocumentManager.getInstance(project).doPostponedOperationsAndUnblockDocument(editor.document)
-                return
-            }
-        }
-
-        // 没有 implements 子句，在类名后添加
-        val nameIdentifier = psiClass.nameIdentifier ?: return
-        val insertOffset = nameIdentifier.textRange.endOffset
-        editor.document.insertString(insertOffset, " implements $interfaceName")
-        PsiDocumentManager.getInstance(project).doPostponedOperationsAndUnblockDocument(editor.document)
     }
 
     @Suppress("UnstableApiUsage")
@@ -100,21 +50,25 @@ class GenerateCodecAction : AnAction() {
 
         fields.filter { !it.hasModifier(JvmModifier.STATIC) }.forEach {
             fieldsStr.append(
-                "    ${getCodecRef(it.typeElement)}.${getFieldOf(it)}.forGetter(${
-                    getGetterName(
-                        className,
-                        it,
-                        getFieldAndGetterMethod(psiClass)
-                    )
-                }),\n"
+                """
+                    ${getCodecRef(it.typeElement)}
+                    .${getFieldOf(it)}
+                    .forGetter(${
+                        getGetterName(
+                            className,
+                            it,
+                            getFieldAndGetterMethod(psiClass)
+                        )
+                    }),
+                    
+                """.trimIndent()
             )
         }
 
         psiClass.add(
             JavaCodeStyleManager.getInstance(project).shortenClassReferences(
                 PsiElementFactory.getInstance(project).createFieldFromText(
-                    "public static final $Codec<$className> CODEC = $RecordCodecBuilder.create(ins -> ins.group(\n" +
-                            "${fieldsStr.toString().removeSuffix(",\n") + "\n"}).apply(ins, $className::new));",
+                    "public static final $MapCodec<$className> CODEC = $CodecUtil.mapCodec(\n$fieldsStr$className::new\n);",
                     psiClass
                 )
             )
@@ -123,15 +77,15 @@ class GenerateCodecAction : AnAction() {
 
     private fun getCodecRef(field: PsiTypeElement?, typeName: String = getTypeName(field)): String {
         if (vanillaCodecClasses.contains(typeName)) {
-            return "$Codec.${vanillaCodecFieldName[vanillaCodecClasses.indexOf(typeName)]}"
+            return "$MapCodec.${vanillaCodecFieldName[vanillaCodecClasses.indexOf(typeName)]}"
         } else if (vanillaKeywordCodec.contains(typeName)) {
-            return "$Codec.${vanillaCodecFieldName[vanillaKeywordCodec.indexOf(typeName)]}"
+            return "$MapCodec.${vanillaCodecFieldName[vanillaKeywordCodec.indexOf(typeName)]}"
         } else when (typeName) {
             "java.util.List" -> {
                 val fieldGeneric = getFieldGeneric(field)
 
                 if (fieldGeneric.isNotEmpty()) {
-                    return "${getCodecRef(fieldGeneric[0], getTypeName(fieldGeneric[0]))}.listOf()"
+                    return "${getCodecRef(fieldGeneric[0], getTypeName(fieldGeneric[0]))}\n.listOf()"
                 }
             }
 
@@ -139,7 +93,7 @@ class GenerateCodecAction : AnAction() {
                 val fieldGeneric = getFieldGeneric(field)
 
                 if (fieldGeneric.isNotEmpty()) {
-                    return "$Codec.unboundedMap(${
+                    return "$MapCodec.unboundedMap(${
                         getCodecRef(
                             fieldGeneric[0],
                             getTypeName(fieldGeneric[0])
@@ -165,7 +119,7 @@ class GenerateCodecAction : AnAction() {
     }
 
     private fun getFieldOf(field: PsiField): String {
-        field.annotations.forEach {
+        field.annotations.forEach { it ->
             val name = it.qualifiedName ?: return@forEach
             val split = name.split("\\.".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
 

@@ -14,7 +14,7 @@ import com.intellij.psi.codeStyle.JavaCodeStyleManager
  * @author TT432
  */
 @Suppress("ConstPropertyName", "LocalVariableName", "DuplicatedCode")
-class GenerateStreamCodecAction : AnAction() {
+class GenerateAnvilLibStreamCodecAction : AnAction() {
     companion object {
         const val ByteBufCodecs: String = "net.minecraft.network.codec.ByteBufCodecs"
         const val StreamCodec = "net.minecraft.network.codec.StreamCodec"
@@ -112,11 +112,7 @@ class GenerateStreamCodecAction : AnAction() {
 
                 fields = fields.filter { !it.hasModifier(JvmModifier.STATIC) }.toTypedArray()
 
-                if (fields.size <= 6) {
-                    serializeWithinSixFields(fields, className, psiClass, project)
-                } else {
-                    serializeMoreThanSixFields(fields, className, psiClass, project)
-                }
+                serialize(fields, className, psiClass, project)
             }
         }
     }
@@ -147,7 +143,7 @@ class GenerateStreamCodecAction : AnAction() {
         PsiDocumentManager.getInstance(project).doPostponedOperationsAndUnblockDocument(editor.document)
     }
 
-    private fun serializeWithinSixFields(
+    private fun serialize(
         fields: Array<out PsiField>,
         className: @NlsSafe String,
         psiClass: PsiClass,
@@ -163,62 +159,15 @@ class GenerateStreamCodecAction : AnAction() {
         }
 
         val ByteBuf = getFinalByteBufType(fields, project)
+        val CompositeSource = if (fields.size <= 6) StreamCodec else StreamCodecUtil
         psiClass.add(
             JavaCodeStyleManager.getInstance(project).shortenClassReferences(
                 PsiElementFactory.getInstance(project).createFieldFromText(
-                    "public static final $StreamCodec<$ByteBuf, $className> STREAM_CODEC = $StreamCodec.composite(\n$fieldsStr$className::new\n);",
+                    "public static final $StreamCodec<$ByteBuf, $className> STREAM_CODEC = $CompositeSource.composite(\n$fieldsStr$className::new\n);",
                     psiClass
                 )
             )
         )
-    }
-
-    private fun serializeMoreThanSixFields(
-        fields: Array<out PsiField>,
-        className: @NlsSafe String,
-        psiClass: PsiClass,
-        project: Project
-    ) {
-        val decodeStr = StringBuilder()
-        val decodeConstructStrBuilder = StringBuilder()
-        val encodeStr = StringBuilder()
-
-        fields.forEach {
-            decodeStr.append(
-                "        ${getTypeName(it)} ${it.name} = ${getCodecRef(it.typeElement)}.decode(buf);\n"
-            )
-            decodeConstructStrBuilder.append(
-                "${it.name}, "
-            )
-            encodeStr.append(
-                "        ${getCodecRef(it.typeElement)}.encode(buf, ${getDirectGetterName(it, getFieldAndGetterMethod(psiClass))});\n"
-            )
-        }
-
-        val decodeConstructStr = decodeConstructStrBuilder.substring(0, decodeConstructStrBuilder.length - 2)
-
-        psiClass.add(
-            JavaCodeStyleManager.getInstance(project).shortenClassReferences(
-                PsiElementFactory.getInstance(project).createFieldFromText(
-                    "public static final $StreamCodec<io.netty.buffer.ByteBuf, $className> STREAM_CODEC = new $StreamCodec<>() {\n" +
-                    "    @java.lang.Override\n" +
-                    "    public $className decode(io.netty.buffer.ByteBuf buf) {\n" +
-                    "$decodeStr" +
-                    "        return new $className($decodeConstructStr);\n" +
-                    "    }\n\n" +
-                    "    @java.lang.Override\n" +
-                    "    public void encode(io.netty.buffer.ByteBuf buf, $className value) {\n" +
-                    "$encodeStr" +
-                    "    }\n" +
-                    "};",
-                    psiClass
-                )
-            )
-        )
-    }
-
-    private fun getDirectGetterName(field: PsiField, map: Map<PsiField, String?>): String {
-        return "value." + if (map.containsKey(field) && map[field] != null) "${map[field]}()" else field.name
     }
 }
 
