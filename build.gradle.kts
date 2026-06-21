@@ -9,9 +9,7 @@ version = "1.3.0-SNAPSHOT"
 
 repositories {
     mavenCentral()
-    intellijPlatform {
-        defaultRepositories()
-    }
+    intellijPlatform.defaultRepositories()
 }
 
 // Configure Gradle IntelliJ Plugin
@@ -66,9 +64,7 @@ tasks {
     }
 }
 
-idea {
-    module {
-        isDownloadJavadoc = true
-        isDownloadSources = true
-    }
+idea.module {
+    isDownloadJavadoc = true
+    isDownloadSources = true
 }

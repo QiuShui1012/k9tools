@@ -18,8 +18,14 @@ import com.intellij.psi.util.PsiTreeUtil
 data class Result(val editor: Editor?, val psiClass: PsiClass?)
 
 fun getFieldAndGetterMethod(psiClass: PsiClass): Map<PsiField, String?> {
+    val isRecord = psiClass.isRecord
     return psiClass.allFields.associateWith { field ->
-        findGetterMethodName(psiClass, field)
+        if (isRecord) {
+            // Record 的 getter 方法名与字段名相同
+            field.name
+        } else {
+            findGetterMethodName(psiClass, field)
+        }
     }
 }
 
