@@ -1,156 +1,100 @@
 package io.github.tt432.k9tools
 
 import com.intellij.psi.PsiTypeElement
-import java.util.logging.Logger
-
-private val LOGGER = Logger.getLogger("CodecFinder")
 
 private const val Codec: String = "com.mojang.serialization.Codec"
 private const val ExtraCodecs: String = "net.minecraft.util.ExtraCodecs"
 private const val ByteBufCodecs: String = "net.minecraft.network.codec.ByteBufCodecs"
 
 fun getCodecRef(field: PsiTypeElement?, typeName: String = getTypeName(field), mapKey: Boolean = false): String {
-    LOGGER.info("getCodecRef: typeName=$typeName, mapKey=$mapKey")
-
-    val result = if (vanillaCodecClasses.contains(typeName)) {
-        val idx = vanillaCodecClasses.indexOf(typeName)
-        val fieldName = vanillaCodecFieldName[idx]
-        LOGGER.info("  匹配 vanilla 基本类型: $typeName -> Codec.$fieldName")
-        "$Codec.${fieldName}"
+    return if (vanillaCodecClasses.contains(typeName)) {
+        "$Codec.${vanillaCodecFieldName[vanillaCodecClasses.indexOf(typeName)]}"
     } else if (vanillaKeywordCodec.contains(typeName)) {
-        val idx = vanillaKeywordCodec.indexOf(typeName)
-        val fieldName = vanillaCodecFieldName[idx]
-        LOGGER.info("  匹配 Java 关键字: $typeName -> Codec.$fieldName")
-        "$Codec.${fieldName}"
+        "$Codec.${vanillaCodecFieldName[vanillaKeywordCodec.indexOf(typeName)]}"
     } else if (vanillaExtraCodecs.containsKey(typeName)) {
-        val fieldName = vanillaExtraCodecs[typeName]
-        LOGGER.info("  匹配 ExtraCodecs: $typeName -> ExtraCodecs.$fieldName")
-        "$ExtraCodecs.${fieldName}"
+        "$ExtraCodecs.${vanillaExtraCodecs[typeName]}"
     } else if (mapKey && vanillaMapKeySpecialCodecs.containsKey(typeName)) {
-        val codec = vanillaMapKeySpecialCodecs[typeName]
-        LOGGER.info("  匹配 MapKey 特殊 Codec: $typeName -> $codec")
-        "$codec"
+        "${vanillaMapKeySpecialCodecs[typeName]}"
     } else if (vanillaSpecialCodecs.containsKey(typeName)) {
-        val codec = vanillaSpecialCodecs[typeName]
-        LOGGER.info("  匹配特殊 Codec: $typeName -> $codec")
-        "$codec"
+        "${vanillaSpecialCodecs[typeName]}"
     } else when (typeName) {
         "java.util.List" -> {
             val fieldGeneric = getFieldGeneric(field)
-            LOGGER.info("  处理 List，泛型参数数量: ${fieldGeneric.size}")
+
             if (fieldGeneric.isNotEmpty()) {
                 val elementCodec = getCodecRef(fieldGeneric[0], getTypeName(fieldGeneric[0]))
-                val resultList = "${elementCodec}\n.listOf()"
-                LOGGER.info("  List Codec: $resultList")
-                return resultList
+                return "$elementCodec\n.listOf()"
             }
-            LOGGER.info("  List 没有泛型参数，返回空字符串")
             ""
         }
 
         "java.util.Map" -> {
             val fieldGeneric = getFieldGeneric(field)
-            LOGGER.info("  处理 Map，泛型参数数量: ${fieldGeneric.size}")
+
             if (fieldGeneric.isNotEmpty()) {
                 val keyCodec = getCodecRef(fieldGeneric[0], getTypeName(fieldGeneric[0]), true)
                 val valueCodec = getCodecRef(fieldGeneric[1], getTypeName(fieldGeneric[1]))
-                val resultMap = "$Codec.unboundedMap($keyCodec, $valueCodec)"
-                LOGGER.info("  Map Codec: $resultMap")
-                return resultMap
+                return "$Codec.unboundedMap($keyCodec, $valueCodec)"
             }
-            LOGGER.info("  Map 没有泛型参数，返回空字符串")
             ""
         }
 
         "java.util.Optional" -> {
             val fieldGeneric = getFieldGeneric(field)
-            LOGGER.info("  处理 Optional，泛型参数数量: ${fieldGeneric.size}")
+
             if (fieldGeneric.isNotEmpty()) {
-                val innerCodec = getCodecRef(fieldGeneric[0], getTypeName(fieldGeneric[0]))
-                LOGGER.info("  Optional Codec: $innerCodec")
-                return innerCodec
+                return getCodecRef(fieldGeneric[0], getTypeName(fieldGeneric[0]))
             }
-            LOGGER.info("  Optional 没有泛型参数，返回空字符串")
             ""
         }
 
         else -> "$typeName.CODEC"
     }
-
-    LOGGER.info("getCodecRef 结果: $result")
-    return result
 }
 
 fun getStreamCodecRef(field: PsiTypeElement?, typeName: String = getTypeName(field), mapKey: Boolean = false): String {
-    LOGGER.info("getStreamCodecRef: typeName=$typeName, mapKey=$mapKey")
-
-    val result = if (vanillaStreamCodecClasses.contains(typeName)) {
-        val idx = vanillaStreamCodecClasses.indexOf(typeName)
-        val fieldName = vanillaStreamCodecFieldName[idx]
-        LOGGER.info("  匹配 StreamCodec 基本类型: $typeName -> ByteBufCodecs.$fieldName")
-        "$ByteBufCodecs.${fieldName}"
+    return if (vanillaStreamCodecClasses.contains(typeName)) {
+        "$ByteBufCodecs.${vanillaStreamCodecFieldName[vanillaStreamCodecClasses.indexOf(typeName)]}"
     } else if (vanillaKeywordCodec.contains(typeName)) {
-        val idx = vanillaKeywordCodec.indexOf(typeName)
-        val fieldName = vanillaStreamCodecFieldName[idx]
-        LOGGER.info("  匹配 Java 关键字 StreamCodec: $typeName -> ByteBufCodecs.$fieldName")
-        "$ByteBufCodecs.${fieldName}"
+        "$ByteBufCodecs.${vanillaStreamCodecFieldName[vanillaKeywordCodec.indexOf(typeName)]}"
     } else if (mapKey && vanillaMapKeySpecialStreamCodecs.containsKey(typeName)) {
-        val codec = vanillaMapKeySpecialStreamCodecs[typeName]
-        LOGGER.info("  匹配 MapKey 特殊 StreamCodec: $typeName -> $codec")
-        "$codec"
+        "${vanillaMapKeySpecialStreamCodecs[typeName]}"
     } else if (vanillaSpecialStreamCodecs.containsKey(typeName)) {
-        val codec = vanillaSpecialStreamCodecs[typeName]
-        LOGGER.info("  匹配特殊 StreamCodec: $typeName -> $codec")
-        "$codec"
+        "${vanillaSpecialStreamCodecs[typeName]}"
     } else when (typeName) {
         "java.util.List" -> {
             val fieldGeneric = getFieldGeneric(field)
-            LOGGER.info("  处理 List，泛型参数数量: ${fieldGeneric.size}")
+
             if (fieldGeneric.isNotEmpty()) {
                 val elementCodec = getStreamCodecRef(fieldGeneric[0], getTypeName(fieldGeneric[0]))
-                val resultList = "${elementCodec}.apply($ByteBufCodecs.list())"
-                LOGGER.info("  List StreamCodec: $resultList")
-                return resultList
+                return "${elementCodec}.apply($ByteBufCodecs.list())"
             }
-            LOGGER.info("  List 没有泛型参数，返回空字符串")
             ""
         }
 
         "java.util.Map" -> {
             val fieldGeneric = getFieldGeneric(field)
-            LOGGER.info("  处理 Map，泛型参数数量: ${fieldGeneric.size}")
+
             if (fieldGeneric.isNotEmpty()) {
                 val keyCodec = getStreamCodecRef(fieldGeneric[0], getTypeName(fieldGeneric[0]), true)
                 val valueCodec = getStreamCodecRef(fieldGeneric[1], getTypeName(fieldGeneric[1]))
-                val resultMap = "$ByteBufCodecs.map(java.util.HashMap::new, $keyCodec, $valueCodec)"
-                LOGGER.info("  Map StreamCodec: $resultMap")
-                return resultMap
+                return "$ByteBufCodecs.map(java.util.HashMap::new, $keyCodec, $valueCodec)"
             }
-            LOGGER.info("  Map 没有泛型参数，返回空字符串")
             ""
         }
 
         "java.util.Optional" -> {
             val fieldGeneric = getFieldGeneric(field)
-            LOGGER.info("  处理 Optional，泛型参数数量: ${fieldGeneric.size}")
+
             if (fieldGeneric.isNotEmpty()) {
                 val innerCodec = getStreamCodecRef(fieldGeneric[0], getTypeName(fieldGeneric[0]))
-                val resultOptional = "${innerCodec}.apply($ByteBufCodecs::optional)"
-                LOGGER.info("  Optional StreamCodec: $resultOptional")
-                return resultOptional
+                return "${innerCodec}.apply($ByteBufCodecs::optional)"
             }
-            LOGGER.info("  Optional 没有泛型参数，返回空字符串")
             ""
         }
 
-        else -> {
-            LOGGER.info("  使用默认 StreamCodec: $typeName.STREAM_CODEC")
-            "$typeName.STREAM_CODEC"
-        }
+        else -> "$typeName.STREAM_CODEC"
     }
-
-    LOGGER.info("getStreamCodecRef 结果: $result")
-    return result
 }
 
 val vanillaCodecClasses = listOf(
