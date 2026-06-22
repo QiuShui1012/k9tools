@@ -8,7 +8,6 @@ import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiClass
 import com.intellij.psi.PsiElementFactory
 import com.intellij.psi.PsiField
-import com.intellij.psi.PsiTypeElement
 import com.intellij.psi.codeStyle.JavaCodeStyleManager
 
 /**
@@ -75,49 +74,6 @@ class GenerateAnvilLibMapCodecAction : AnAction() {
         )
     }
 
-    private fun getCodecRef(field: PsiTypeElement?, typeName: String = getTypeName(field)): String {
-        if (vanillaCodecClasses.contains(typeName)) {
-            return "$MapCodec.${vanillaCodecFieldName[vanillaCodecClasses.indexOf(typeName)]}"
-        } else if (vanillaKeywordCodec.contains(typeName)) {
-            return "$MapCodec.${vanillaCodecFieldName[vanillaKeywordCodec.indexOf(typeName)]}"
-        } else when (typeName) {
-            "java.util.List" -> {
-                val fieldGeneric = getFieldGeneric(field)
-
-                if (fieldGeneric.isNotEmpty()) {
-                    return "${getCodecRef(fieldGeneric[0], getTypeName(fieldGeneric[0]))}\n.listOf()"
-                }
-            }
-
-            "java.util.Map" -> {
-                val fieldGeneric = getFieldGeneric(field)
-
-                if (fieldGeneric.isNotEmpty()) {
-                    return "$MapCodec.unboundedMap(${
-                        getCodecRef(
-                            fieldGeneric[0],
-                            getTypeName(fieldGeneric[0])
-                        )
-                    }, ${getCodecRef(fieldGeneric[1], getTypeName(fieldGeneric[1]))})"
-                }
-            }
-
-            "java.util.Optional" -> {
-                val fieldGeneric = getFieldGeneric(field)
-
-                if (fieldGeneric.isNotEmpty()) {
-                    return getCodecRef(fieldGeneric[0], getTypeName(fieldGeneric[0]))
-                }
-            }
-
-            else -> {
-                return "$typeName.CODEC"
-            }
-        }
-
-        return ""
-    }
-
     private fun getFieldOf(field: PsiField): String {
         field.annotations.forEach { it ->
             val name = it.qualifiedName ?: return@forEach
@@ -150,41 +106,3 @@ class GenerateAnvilLibMapCodecAction : AnAction() {
         }
     }
 }
-
-private val vanillaCodecClasses = listOf(
-    "java.lang.Boolean",
-    "java.lang.Byte",
-    "java.lang.Short",
-    "java.lang.Integer",
-    "java.lang.Long",
-    "java.lang.Float",
-    "java.lang.Double",
-    "java.lang.String",
-    "java.nio.ByteBuffer",
-    "java.util.stream.IntStream",
-    "java.util.stream.LongStream"
-)
-
-private val vanillaKeywordCodec = listOf(
-    "boolean",
-    "byte",
-    "short",
-    "int",
-    "long",
-    "float",
-    "double"
-)
-
-private val vanillaCodecFieldName = listOf(
-    "BOOL",
-    "BYTE",
-    "SHORT",
-    "INT",
-    "LONG",
-    "FLOAT",
-    "DOUBLE",
-    "STRING",
-    "BYTE_BUFFER",
-    "INT_STREAM",
-    "LONG_STREAM"
-)

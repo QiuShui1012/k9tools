@@ -9,7 +9,6 @@ import com.intellij.openapi.util.NlsSafe
 import com.intellij.psi.PsiClass
 import com.intellij.psi.PsiElementFactory
 import com.intellij.psi.PsiField
-import com.intellij.psi.PsiTypeElement
 import com.intellij.psi.codeStyle.JavaCodeStyleManager
 
 /**
@@ -18,57 +17,8 @@ import com.intellij.psi.codeStyle.JavaCodeStyleManager
 @Suppress("ConstPropertyName", "LocalVariableName", "DuplicatedCode")
 class GenerateStreamCodecAction : AnAction() {
     companion object {
-        const val ByteBufCodecs: String = "net.minecraft.network.codec.ByteBufCodecs"
         const val StreamCodec = "net.minecraft.network.codec.StreamCodec"
         const val ByteBuf: String = "io.netty.buffer.ByteBuf"
-    }
-
-    private fun getCodecRef(field: PsiTypeElement?, typeName: String = getTypeName(field)): String {
-        if (vanillaStreamCodecClasses.contains(typeName)) {
-            return "$ByteBufCodecs.${vanillaStreamCodecFieldName[vanillaStreamCodecClasses.indexOf(typeName)]}"
-        } else if (vanillaKeywordCodec.contains(typeName)) {
-            return "$ByteBufCodecs.${vanillaStreamCodecFieldName[vanillaKeywordCodec.indexOf(typeName)]}"
-        } else when (typeName) {
-            "java.util.List" -> {
-                val fieldGeneric = getFieldGeneric(field)
-
-                if (fieldGeneric.isNotEmpty()) {
-                    return "${
-                        getCodecRef(
-                            fieldGeneric[0],
-                            getTypeName(fieldGeneric[0])
-                        )
-                    }.apply($ByteBufCodecs.list())"
-                }
-            }
-
-            "java.util.Map" -> {
-                val fieldGeneric = getFieldGeneric(field)
-
-                if (fieldGeneric.isNotEmpty()) {
-                    return "$ByteBufCodecs.map(java.util.HashMap::new, ${
-                        getCodecRef(
-                            fieldGeneric[0],
-                            getTypeName(fieldGeneric[0])
-                        )
-                    }, ${getCodecRef(fieldGeneric[1], getTypeName(fieldGeneric[1]))})"
-                }
-            }
-
-            "java.util.Optional" -> {
-                val fieldGeneric = getFieldGeneric(field)
-
-                if (fieldGeneric.isNotEmpty()) {
-                    return "$ByteBufCodecs.optional(${getCodecRef(fieldGeneric[0], getTypeName(fieldGeneric[0]))})"
-                }
-            }
-
-            else -> {
-                return "$typeName.STREAM_CODEC"
-            }
-        }
-
-        return ""
     }
 
     @Suppress("UnstableApiUsage")
@@ -117,7 +67,7 @@ class GenerateStreamCodecAction : AnAction() {
 
         fields.forEach {
             fieldsStr.append(
-                "    ${getCodecRef(it.typeElement)},\n" +
+                "    ${getStreamCodecRef(it.typeElement)},\n" +
                 "    ${getGetter(className, it, getFieldAndGetterMethod(psiClass))},\n"
             )
         }
@@ -145,13 +95,13 @@ class GenerateStreamCodecAction : AnAction() {
 
         fields.forEach {
             decodeStr.append(
-                "        ${getTypeName(it)} ${it.name} = ${getCodecRef(it.typeElement)}.decode(buf);\n"
+                "        ${getTypeRef(it)} ${it.name} = ${getStreamCodecRef(it.typeElement)}.decode(buf);\n"
             )
             decodeConstructStrBuilder.append(
                 "${it.name}, "
             )
             encodeStr.append(
-                "        ${getCodecRef(it.typeElement)}.encode(buf, ${getDirectGetterName(it, getFieldAndGetterMethod(psiClass))});\n"
+                "        ${getStreamCodecRef(it.typeElement)}.encode(buf, ${getDirectGetterName(it, getFieldAndGetterMethod(psiClass))});\n"
             )
         }
 
@@ -181,49 +131,3 @@ class GenerateStreamCodecAction : AnAction() {
         return "value." + if (map.containsKey(field) && map[field] != null) "${map[field]}()" else field.name
     }
 }
-
-val vanillaStreamCodecClasses = listOf(
-    "java.lang.Boolean",
-    "java.lang.Byte",
-    "java.lang.Short",
-    "java.lang.Integer",
-    "java.lang.Long",
-    "java.lang.Float",
-    "java.lang.Double",
-    "java.lang.String",
-    "net.minecraft.nbt.Tag",
-    "net.minecraft.nbt.CompoundTag",
-    "org.joml.Vector3f",
-    "org.joml.Quaternionf",
-    "com.mojang.authlib.properties.PropertyMap",
-    "com.mojang.authlib.GameProfile",
-    "byte[]"
-)
-
-val vanillaStreamCodecFieldName = listOf(
-    "BOOL",
-    "BYTE",
-    "SHORT",
-    "VAR_INT",
-    "VAR_LONG",
-    "FLOAT",
-    "DOUBLE",
-    "STRING_UTF8",
-    "TAG",
-    "COMPOUND_TAG",
-    "VECTOR3F",
-    "QUATERNIONF",
-    "GAME_PROFILE_PROPERTIES",
-    "GAME_PROFILE",
-    "BYTE_ARRAY"
-)
-
-private val vanillaKeywordCodec = listOf(
-    "boolean",
-    "byte",
-    "short",
-    "int",
-    "long",
-    "float",
-    "double"
-)

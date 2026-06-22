@@ -155,6 +155,7 @@ fun getFinalByteBufType(fields: Array<out PsiField>, project: Project): String {
  * 从字段中提取 StreamCodec 的 ByteBuf 泛型类型
  * 查找名为 STREAM_CODEC 的常量字段，提取其泛型参数 B（即 ByteBuf 类型）
  * 如果未找到，返回 ByteBuf 类型
+ * 支持 List、Map、Optional 等容器类型 - 会递归检查容器内元素的 STREAM_CODEC
  *
  * @param field 要检查的字段
  * @param project 当前项目
@@ -178,7 +179,14 @@ private fun findByteBufType(field: PsiField, project: Project): PsiType {
 
     LOGGER.info("  -> 解析到类: ${resolvedClass.qualifiedName}")
 
-    // 1. 查找名为 STREAM_CODEC 的静态常量字段
+    // 0. 首先检查是否是容器类型（List、Map、Optional等），如果是则检查容器内元素的 STREAM_CODEC
+    val containerElementByteBuf = extractByteBufFromContainerElement(fieldType, project)
+    if (containerElementByteBuf != null) {
+        LOGGER.info("  -> 从容器元素类型中提取到 ByteBuf: ${containerElementByteBuf.canonicalText}")
+        return containerElementByteBuf
+    }
+
+    // 1. 检查当前类本身是否有 STREAM_CODEC 字段
     val codecField = resolvedClass.allFields.firstOrNull {
         it.name == "STREAM_CODEC" &&
         it.hasModifierProperty(PsiModifier.STATIC) &&
@@ -231,6 +239,135 @@ private fun findByteBufType(field: PsiField, project: Project): PsiType {
     // 3. 都未找到，返回 ByteBuf
     LOGGER.info("  -> 未找到 StreamCodec，返回默认 ByteBuf")
     return getByteBufType(project)
+}
+
+/**
+ * 从容器类型中提取元素类型的 ByteBuf
+ * 支持：
+ * - List<SomeClass> -> 检查 SomeClass 的 STREAM_CODEC
+ * - Map<String, SomeClass> -> 检查 SomeClass（值类型）的 STREAM_CODEC
+ * - Map<SomeClass, String> -> 检查 SomeClass（键类型）的 STREAM_CODEC
+ * - Optional<SomeClass> -> 检查 SomeClass 的 STREAM_CODEC
+ * - 嵌套容器：List<Map<String, SomeClass>> -> 递归检查 SomeClass
+ *
+ * @param type 要检查的容器类型
+ * @param project 当前项目
+ * @return 找到的 ByteBuf 类型，如果没有则返回 null
+ */
+private fun extractByteBufFromContainerElement(type: PsiType, project: Project): PsiType? {
+    LOGGER.fine("extractByteBufFromContainerElement: 检查类型 ${type.canonicalText}")
+
+    if (type !is PsiClassType) {
+        return null
+    }
+
+    val resolvedClass = type.resolve() ?: return null
+    val className = resolvedClass.qualifiedName ?: return null
+
+    // 检查是否是容器类型
+    val isContainer = when (className) {
+        "java.util.List", "java.util.ArrayList", "java.util.LinkedList",
+        "java.util.Set", "java.util.HashSet", "java.util.LinkedHashSet", "java.util.TreeSet",
+        "java.util.Collection", "java.util.Queue", "java.util.Deque",
+        "java.util.Optional", "java.util.OptionalInt", "java.util.OptionalLong", "java.util.OptionalDouble",
+        "java.util.stream.Stream", "java.util.concurrent.CompletableFuture",
+        "com.google.common.collect.ImmutableList", "com.google.common.collect.ImmutableSet",
+        "com.google.common.collect.ImmutableCollection" -> true
+        "java.util.Map", "java.util.HashMap", "java.util.LinkedHashMap", "java.util.TreeMap",
+        "java.util.concurrent.ConcurrentMap", "java.util.concurrent.ConcurrentHashMap",
+        "com.google.common.collect.ImmutableMap" -> true
+        else -> false
+    }
+
+    if (!isContainer) {
+        return null
+    }
+
+    val parameters = type.parameters
+    LOGGER.fine("  -> 容器类型: $className, 参数数量: ${parameters.size}")
+
+    if (parameters.isEmpty()) {
+        return null
+    }
+
+    // 获取需要检查的元素类型列表
+    val elementTypes = when (className) {
+        // Map 类型检查所有参数（键和值）
+        "java.util.Map", "java.util.HashMap", "java.util.LinkedHashMap", "java.util.TreeMap",
+        "java.util.concurrent.ConcurrentMap", "java.util.concurrent.ConcurrentHashMap",
+        "com.google.common.collect.ImmutableMap" -> {
+            LOGGER.fine("  -> Map 类型，检查所有泛型参数（键和值）")
+            parameters.toList()
+        }
+        // 其他容器只检查第一个参数
+        else -> {
+            LOGGER.fine("  -> 单参数容器，检查第1个参数")
+            listOf(parameters[0])
+        }
+    }
+
+    // 对每个元素类型进行检查
+    for (elementType in elementTypes) {
+        LOGGER.fine("  -> 检查元素类型: ${elementType.canonicalText}")
+
+        // 如果元素类型本身是容器，递归检查
+        val nestedResult = extractByteBufFromContainerElement(elementType, project)
+        if (nestedResult != null) {
+            LOGGER.fine("  -> 嵌套容器中找到 ByteBuf: ${nestedResult.canonicalText}")
+            return nestedResult
+        }
+
+        // 检查元素类型是否是 Class 类型（非基础类型、非数组）
+        if (elementType is PsiClassType) {
+            val elementClass = elementType.resolve()
+            if (elementClass != null && !elementClass.isInterface) {
+                // 检查这个类是否有 STREAM_CODEC 字段
+                val codecField = elementClass.allFields.firstOrNull {
+                    it.name == "STREAM_CODEC" &&
+                    it.hasModifierProperty(PsiModifier.STATIC) &&
+                    it.hasModifierProperty(PsiModifier.FINAL)
+                }
+
+                if (codecField != null) {
+                    LOGGER.fine("  -> 元素类 ${elementClass.qualifiedName} 有 STREAM_CODEC 字段")
+                    val codecType = codecField.type
+                    if (codecType is PsiClassType) {
+                        val parameters2 = codecType.parameters
+                        if (parameters2.isNotEmpty()) {
+                            val firstParam = parameters2[0]
+                            if (isByteBufType(firstParam)) {
+                                LOGGER.fine("  -> 从 STREAM_CODEC 提取到 ByteBuf: ${firstParam.canonicalText}")
+                                return firstParam
+                            }
+                            // 如果第一个参数是 ByteBuf 的子类型，但不是直接匹配
+                            LOGGER.fine("  -> 第一个参数不是 ByteBuf: ${firstParam.canonicalText}")
+                        }
+
+                        // 尝试通过 StreamCodec 类提取
+                        val codecClass = codecType.resolve()
+                        if (codecClass != null && isStreamCodecType(codecClass)) {
+                            val byteBufType = extractByteBufFromStreamCodec(codecClass, project)
+                            if (byteBufType != null && isByteBufType(byteBufType)) {
+                                LOGGER.fine("  -> 从 StreamCodec 类提取到 ByteBuf: ${byteBufType.canonicalText}")
+                                return byteBufType
+                            }
+                        }
+                    }
+                } else {
+                    LOGGER.fine("  -> 元素类 ${elementClass.qualifiedName} 没有 STREAM_CODEC 字段")
+
+                    // 如果元素类没有 STREAM_CODEC，检查它是否实现了 StreamCodec
+                    val streamCodecByteBuf = findStreamCodecByteBuf(elementClass, project)
+                    if (streamCodecByteBuf != null) {
+                        LOGGER.fine("  -> 元素类实现了 StreamCodec，提取到: ${streamCodecByteBuf.canonicalText}")
+                        return streamCodecByteBuf
+                    }
+                }
+            }
+        }
+    }
+
+    return null
 }
 
 /**

@@ -18,58 +18,9 @@ import com.intellij.psi.codeStyle.JavaCodeStyleManager
 @Suppress("ConstPropertyName", "LocalVariableName", "DuplicatedCode")
 class GenerateAnvilLibStreamCodecAction : AnAction() {
     companion object {
-        const val ByteBufCodecs: String = "net.minecraft.network.codec.ByteBufCodecs"
         const val StreamCodec = "net.minecraft.network.codec.StreamCodec"
         const val StreamCodecUtil = "dev.anvilcraft.lib.v2.codec.StreamCodecUtil"
         const val ByteBuf: String = "io.netty.buffer.ByteBuf"
-    }
-
-    private fun getCodecRef(field: PsiTypeElement?, typeName: String = getTypeName(field)): String {
-        if (vanillaStreamCodecClasses.contains(typeName)) {
-            return "$ByteBufCodecs.${vanillaStreamCodecFieldName[vanillaStreamCodecClasses.indexOf(typeName)]}"
-        } else if (vanillaKeywordCodec.contains(typeName)) {
-            return "$ByteBufCodecs.${vanillaStreamCodecFieldName[vanillaKeywordCodec.indexOf(typeName)]}"
-        } else when (typeName) {
-            "java.util.List" -> {
-                val fieldGeneric = getFieldGeneric(field)
-
-                if (fieldGeneric.isNotEmpty()) {
-                    return "${
-                        getCodecRef(
-                            fieldGeneric[0],
-                            getTypeName(fieldGeneric[0])
-                        )
-                    }.apply($ByteBufCodecs.list())"
-                }
-            }
-
-            "java.util.Map" -> {
-                val fieldGeneric = getFieldGeneric(field)
-
-                if (fieldGeneric.isNotEmpty()) {
-                    return "$ByteBufCodecs.map(java.util.HashMap::new, ${
-                        getCodecRef(
-                            fieldGeneric[0],
-                            getTypeName(fieldGeneric[0])
-                        )
-                    }, ${getCodecRef(fieldGeneric[1], getTypeName(fieldGeneric[1]))})"
-                }
-            }
-
-            "java.util.Optional" -> {
-                val fieldGeneric = getFieldGeneric(field)
-
-                if (fieldGeneric.isNotEmpty()) {
-                    return "$ByteBufCodecs.optional(${getCodecRef(fieldGeneric[0], getTypeName(fieldGeneric[0]))})"
-                }
-            }
-
-            else -> {
-                return "$typeName.STREAM_CODEC"
-            }
-        }
-
-        return ""
     }
 
     @Suppress("UnstableApiUsage")
@@ -114,7 +65,7 @@ class GenerateAnvilLibStreamCodecAction : AnAction() {
 
         fields.forEach {
             fieldsStr.append(
-                "    ${getCodecRef(it.typeElement)},\n" +
+                "    ${getStreamCodecRef(it.typeElement)},\n" +
                 "    ${getGetter(className, it, getFieldAndGetterMethod(psiClass))},\n"
             )
         }
@@ -130,14 +81,41 @@ class GenerateAnvilLibStreamCodecAction : AnAction() {
             )
         )
     }
+
+    private fun getStreamCodecRef(field: PsiTypeElement?, typeName: String = getTypeName(field)): String {
+        for ((types, streamCodec) in anvillibStreamCodecs) {
+            if (types.contains(typeName)) {
+                return "$StreamCodecUtil.$streamCodec"
+            }
+        }
+        return getStreamCodecRef(field, typeName, false)
+    }
 }
 
-private val vanillaKeywordCodec = listOf(
-    "boolean",
-    "byte",
-    "short",
-    "int",
-    "long",
-    "float",
-    "double"
+private val anvillibStreamCodecs = mapOf(
+    Pair(listOf("net.minecraft.world.level.block.state.BlockState"), "BLOCK_STATE"),
+    Pair(listOf("net.minecraft.world.entity.EntityType"), "ENTITY"),
+    Pair(listOf("java.lang.Character", "char"), "CHAR"),
+    Pair(listOf("net.minecraft.world.phys.Vec3"), "VEC3"),
+    Pair(listOf("net.minecraft.core.Vec3i"), "VEC3I"),
+    Pair(listOf("net.minecraft.world.level.storage.loot.providers.number.NumberProvider"), "NUMBER_PROVIDER"),
+    Pair(listOf("net.minecraft.util.ExtraCodecs.TagOrElementLocation"), "TAG_OR_ELEMENT_LOCATION"),
+    Pair(listOf("net.minecraft.advancements.criterion.EntityTypePredicate"), "ENTITY_TYPE_PREDICATE"),
+    Pair(listOf("net.minecraft.advancements.criterion.DistancePredicate"), "DISTANCE_PREDICATE"),
+    Pair(listOf("net.minecraft.advancements.criterion.MovementPredicate"), "MOVEMENT_PREDICATE"),
+    Pair(listOf("net.minecraft.advancements.criterion.LocationPredicate.PositionPredicate"), "POSITION_PREDICATE"),
+    Pair(listOf("net.minecraft.advancements.criterion.LightPredicate"), "LIGHT_PREDICATE"),
+    Pair(listOf("net.minecraft.advancements.criterion.FluidPredicate"), "FLUID_PREDICATE"),
+    Pair(listOf("net.minecraft.advancements.criterion.LocationPredicate"), "LOCATION_PREDICATE"),
+    Pair(listOf("net.minecraft.advancements.criterion.EntityPredicate.LocationWrapper"), "LOCATION_WRAPPER"),
+    Pair(listOf("net.minecraft.advancements.criterion.MobEffectsPredicate.MobEffectInstancePredicate"), "MOB_EFFECT_INSTANCE_PREDICATE"),
+    Pair(listOf("net.minecraft.advancements.criterion.MobEffectsPredicate"), "MOB_EFFECTS_PREDICATE"),
+    Pair(listOf("net.minecraft.advancements.criterion.NbtPredicate"), "NBT_PREDICATE"),
+    Pair(listOf("net.minecraft.advancements.criterion.EntityFlagsPredicate"), "ENTITY_FLAGS_PREDICATE"),
+    Pair(listOf("net.minecraft.advancements.criterion.ItemPredicate"), "ITEM_PREDICATE"),
+    Pair(listOf("net.minecraft.advancements.criterion.EntityEquipmentPredicate"), "ENTITY_EQUIPMENT_PREDICATE"),
+    Pair(listOf("net.minecraft.advancements.criterion.EntitySubPredicate"), "ENTITY_SUB_PREDICATE"),
+    Pair(listOf("net.minecraft.advancements.criterion.SlotsPredicate"), "SLOTS_PREDICATE"),
+    Pair(listOf("net.minecraft.advancements.criterion.EntityPredicate"), "ENTITY_PREDICATE"),
+    Pair(listOf("net.minecraft.advancements.criterion.DamageSourcePredicate"), "DAMAGE_SOURCE_PREDICATE"),
 )
